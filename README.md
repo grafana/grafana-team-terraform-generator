@@ -2,6 +2,8 @@
 
 This tool generates Terraform configurations for Grafana teams and their external group mappings. It supports multiple identity providers and can generate both resource definitions and outputs.
 
+![image](https://github.com/user-attachments/assets/3740ad5d-f11c-42a4-8abe-f336e8ed83a1)
+
 ## Supported Providers
 
 Currently, the tool supports the following identity providers:
