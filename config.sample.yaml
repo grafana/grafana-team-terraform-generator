@@ -1,0 +1,13 @@
+# Provider selection
+provider: azure
+
+# Azure AD configuration
+azure:
+  client_id: your_azure_client_id
+  client_secret: your_azure_client_secret
+  tenant_id: your_azure_tenant_id
+
+# General settings (optional, for future use)
+settings:
+  output_file: grafana_teams.tf
+  log_level: info
