@@ -24,3 +24,4 @@ go.work.sum
 config.yaml
 *.tf
 grafana_tf
+.env
