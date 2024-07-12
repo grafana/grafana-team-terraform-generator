@@ -17,7 +17,7 @@ To build the Grafana Terraform Generator, follow these steps:
 1. Ensure you have Go installed on your system (version 1.16 or later recommended).
 2. Clone this repository:
    ```
-   git clone https://github.com/yourusername/grafana-terraform-generator.git
+   git clone https://github.com/grafana/grafana-terraform-generator.git
    cd grafana-terraform-generator
    ```
 3. Build the binary:
@@ -103,7 +103,11 @@ The tool supports several commands:
    GTF_LOG_LEVEL=debug grafana-tf-gen team
    ```
 
-## Adding New Providers
+## Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+### Adding New Providers
 
 To add support for a new identity provider:
 
@@ -111,9 +115,6 @@ To add support for a new identity provider:
 2. Add a case for the new provider in the `fetchGroups` function in `main.go`.
 3. Update the README to include the new supported provider.
 
-## Contributing
-
-Contributions are welcome! Please feel free to submit a Pull Request.
 
 ## License
 
