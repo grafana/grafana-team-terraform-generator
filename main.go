@@ -1,17 +1,9 @@
 package main
 
 import (
-	"context"
-	"fmt"
 	"log/slog"
 	"os"
-	"strings"
 
-	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
-	abstractions "github.com/microsoft/kiota-abstractions-go"
-	msgraph "github.com/microsoftgraph/msgraph-sdk-go"
-	msgroups "github.com/microsoftgraph/msgraph-sdk-go/groups"
-	"github.com/microsoftgraph/msgraph-sdk-go/models"
 	"github.com/spf13/viper"
 )
 
@@ -34,8 +26,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	slog.SetLogLoggerLevel(slog.LevelInfo)
+	viperLevel := viper.GetString("log.level")
+	if viperLevel == "debug" {
+		slog.SetLogLoggerLevel(slog.LevelDebug)
+	}
+
 	// Get the selected provider
 	provider := viper.GetString("provider")
+
+	baseDir := "grafana_tf"
+	if len(os.Args) > 1 && os.Args[1] == "init" {
+		slog.Info("Initializing basic Terraform template")
+		err := createGrafanaTerraformStructure(baseDir)
+		if err != nil {
+			slog.Error("Failed to create Terraform structure", "error", err)
+			os.Exit(1)
+		}
+		return
+	}
 
 	var groups []Group
 
@@ -53,14 +62,24 @@ func main() {
 		os.Exit(1)
 	}
 
+	teamFile := "main.tf"
+	// if inited with `init` command, the file will be created in grafana_tf directory
+	if _, err := os.Stat(baseDir); err == nil {
+		teamFile = baseDir + "/modules/teams/main.tf"
+	}
+
+	if _, err := os.Stat(teamFile); err == nil {
+		slog.Warn("Terraform file already exists, overwriting", "file", teamFile)
+	}
+
 	// Generate Terraform file
-	err = generateTerraformFile(groups)
+	err = generateTerraformFile(teamFile, groups)
 	if err != nil {
 		slog.Error("Failed to generate Terraform file", "error", err)
 		os.Exit(1)
 	}
 
-	slog.Info("Terraform file generated successfully", "file", "grafana_teams.tf")
+	slog.Info("Terraform file generated successfully", "file", teamFile)
 }
 
 func setupConfig() error {
@@ -68,128 +87,13 @@ func setupConfig() error {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 
+	viper.AutomaticEnv()
 	err := viper.ReadInConfig()
 	if err != nil {
-		return fmt.Errorf("failed to read config file: %v", err)
+		slog.Warn("failed to read config file. Only environment variables will be used", "error", err)
 	}
 
 	// Set defaults
 	viper.SetDefault("provider", "azure")
-	return nil
-}
-
-func getAzureGroups() ([]Group, error) {
-	clientID := viper.GetString("azure.client_id")
-	clientSecret := viper.GetString("azure.client_secret")
-	tenantID := viper.GetString("azure.tenant_id")
-
-	// Azure AD authentication
-	cred, err := azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get Azure credentials: %v", err)
-	}
-
-	// Create a new Graph client
-	client, err := msgraph.NewGraphServiceClientWithCredentials(cred, nil)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create Graph client: %v", err)
-	}
-
-	return fetchAllGroups(client)
-}
-
-// Original function refactored to use fetchGroupsPage
-func fetchAllGroups(client *msgraph.GraphServiceClient) ([]Group, error) {
-	var groups []Group
-	var nextLink *string
-	requestHeaders := abstractions.NewRequestHeaders()
-	requestHeaders.Add("ConsistencyLevel", "eventual")
-
-	for {
-		result, err := fetchGroupsPage(client, nextLink, requestHeaders)
-		if err != nil {
-			return nil, err
-		}
-
-		groups = append(groups, result.Groups...)
-
-		if result.NextLink == nil {
-			break // No more pages
-		}
-		nextLink = result.NextLink
-	}
-
-	return groups, nil
-}
-
-// fetchGroupsPage fetches a single page of groups
-func fetchGroupsPage(client *msgraph.GraphServiceClient, nextLink *string, requestHeaders *abstractions.RequestHeaders) (fetchGroupsResult, error) {
-	var err error
-	var result models.GroupCollectionResponseable
-
-	if nextLink == nil {
-		// First request
-		result, err = client.Groups().Get(context.Background(), &msgroups.GroupsRequestBuilderGetRequestConfiguration{
-			QueryParameters: &msgroups.GroupsRequestBuilderGetQueryParameters{
-				Select: []string{"displayName", "id"},
-				Top:    Int32(300), // Max value allowed
-			},
-			Headers: requestHeaders,
-		})
-	} else {
-		// Subsequent requests using the next link
-		result, err = client.Groups().WithUrl(*nextLink).Get(context.Background(), nil)
-	}
-
-	if err != nil {
-		return fetchGroupsResult{}, fmt.Errorf("failed to fetch groups: %v", err)
-	}
-
-	var groups []Group
-	for _, group := range result.GetValue() {
-		groups = append(groups, Group{
-			Name:       *group.GetDisplayName(),
-			Identifier: *group.GetId(),
-		})
-	}
-
-	return fetchGroupsResult{
-		Groups:   groups,
-		NextLink: result.GetOdataNextLink(),
-	}, nil
-}
-
-// Helper function to convert int32 to *int32
-func Int32(v int32) *int32 {
-	return &v
-}
-
-func generateTerraformFile(groups []Group) error {
-	file, err := os.Create("grafana_teams.tf")
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	for _, group := range groups {
-		resourceName := strings.ReplaceAll(strings.ToLower(group.Name), " ", "_")
-
-		_, err = file.WriteString(fmt.Sprintf(`
-resource "grafana_team" "%s" {
-  name = "%s"
-}
-
-resource "grafana_team_external_group" "%s_group" {
-  team_id = grafana_team.%s.id
-  groups  = ["%s"]
-}
-
-`, resourceName, group.Name, resourceName, resourceName, group.Identifier))
-
-		if err != nil {
-			return err
-		}
-	}
-
 	return nil
 }
