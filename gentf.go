@@ -2,67 +2,99 @@ package main
 
 import (
 	"fmt"
-	"os"
 	"strings"
 )
 
-func generateTerraformFile(filepath string, groups []Group) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
+func generateMainTerraformFile(groups []Group) string {
+	// Write the locals block for teams
+	maintf := `
+locals {
+  teams = {
+`
+	// Generate the teams map
 	for _, group := range groups {
 		resourceName := strings.ReplaceAll(strings.ToLower(group.Name), " ", "_")
-
-		_, err = file.WriteString(fmt.Sprintf(`
-resource "grafana_team" "%s" {
-  name = "%s"
+		maintf += fmt.Sprintf("    %s = {\n      name = \"%s\"\n      group_id = \"%s\"\n      folder_name = \"%s Folder\"\n    }\n",
+			resourceName, group.Name, group.Identifier, group.Name)
+	}
+	// Close the locals block
+	maintf += `  }
 }
 
-resource "grafana_team_external_group" "%s_group" {
-  team_id = grafana_team.%s.id
-  groups  = ["%s"]
+module "teams" {
+  source = "./modules/teams"
+  teams  = local.teams
 }
 
-`, resourceName, group.Name, resourceName, resourceName, group.Identifier))
-
-		if err != nil {
-			return err
-		}
-	}
-
-	return nil
+module "folders" {
+  source    = "./modules/folders"
+  teams     = local.teams
+  team_ids  = module.teams.team_ids
+}
+`
+	return maintf
 }
 
-func generateOutputsFile(filepath string, groups []Group) error {
-	file, err := os.Create(filepath)
-	if err != nil {
-		return err
-	}
-	defer file.Close()
-
-	// Write the opening of the outputs block
-	_, err = file.WriteString("output \"team_ids\" {\n  value = {\n")
-	if err != nil {
-		return err
-	}
-
-	// Generate an output for each team
-	for _, group := range groups {
-		resourceName := strings.ReplaceAll(strings.ToLower(group.Name), " ", "_")
-		_, err = file.WriteString(fmt.Sprintf("    %s = grafana_team.%s.id\n", resourceName, resourceName))
-		if err != nil {
-			return err
-		}
-	}
-
-	// Write the closing of the outputs block
-	_, err = file.WriteString("  }\n  description = \"Map of team names to their IDs\"\n}\n")
-	if err != nil {
-		return err
-	}
-
-	return nil
+const TeamModuleMain = `variable "teams" {
+  description = "Map of team configurations"
+  type = map(object({
+    name      = string
+    group_id  = string
+    folder_name = string
+  }))
 }
+
+resource "grafana_team" "teams" {
+  for_each = var.teams
+  name     = each.value.name
+}
+
+resource "grafana_team_external_group" "team_groups" {
+  for_each = var.teams
+  team_id  = resource.grafana_team.teams[each.key].id
+  groups = [each.value.group_id]
+}
+
+output "team_ids" {
+  value = {
+    for key, team in resource.grafana_team.teams : key => team.id
+  }
+  description = "Map of team names to their IDs"
+}
+`
+
+const FolderModuleMain = `variable "teams" {
+  description = "Map of team configurations"
+  type = map(object({
+    name        = string
+    group_id    = string
+    folder_name = string
+  }))
+}
+
+variable "team_ids" {
+  description = "Map of team names to their IDs"
+  type        = map(string)
+}
+
+resource "grafana_folder" "folders" {
+  for_each = var.teams
+  title    = each.value.folder_name
+}
+
+resource "grafana_folder_permission" "folder_permissions" {
+  for_each   = grafana_folder.folders
+  folder_uid = each.value.uid
+  permissions {
+    team_id    = var.team_ids[each.key]
+    permission = "Admin"
+  }
+}
+
+output "folder_ids" {
+  value = {
+    for key, folder in grafana_folder.folders : key => folder.id
+  }
+  description = "Map of folder names to their IDs"
+}
+`
