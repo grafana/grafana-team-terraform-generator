@@ -1,8 +1,6 @@
 module github.com/grafana/grafana-team-terraform-generator
 
-go 1.24.0
-
-toolchain go1.24.10
+go 1.24.11
 
 require (
 	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
