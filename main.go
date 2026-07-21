@@ -3,6 +3,7 @@ package main
 import (
 	"log/slog"
 	"os"
+	"strings"
 
 	"github.com/spf13/viper"
 )
@@ -49,6 +50,8 @@ func setupConfig() error {
 	viper.SetConfigType("yaml")
 	viper.AddConfigPath(".")
 
+	viper.SetEnvPrefix("GTF")
+	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 	err := viper.ReadInConfig()
 	if err != nil {

@@ -15,13 +15,16 @@ This tool generates Terraform configurations for Grafana teams, their external g
 
 To build the Grafana Terraform Generator, follow these steps:
 
-1. Ensure you have Go installed on your system (version 1.16 or later recommended).
+1. Ensure you have Go 1.26 or later installed.
 2. Clone this repository:
+
    ```
    git clone https://github.com/yourusername/grafana-terraform-generator.git
    cd grafana-terraform-generator
    ```
+
 3. Build the binary:
+
    ```
    go build -o grafana-tf-gen
    ```
@@ -75,28 +78,33 @@ grafana_tf/
 ## Using the Generated Terraform Files
 
 1. Navigate to the `grafana_tf` directory:
+
    ```
    cd grafana_tf
    ```
 
 2. Initialize the Terraform working directory:
+
    ```
    terraform init
    ```
 
 3. Set the required variables:
    - Create a `terraform.tfvars` file with the following content:
+
      ```
      grafana_url = "https://your-grafana-instance.com"
      grafana_auth = "your-grafana-api-key"
      ```
 
 4. Review the planned changes:
+
    ```
    terraform plan
    ```
 
 5. Apply the configuration:
+
    ```
    terraform apply
    ```
@@ -105,7 +113,9 @@ This will create the Grafana teams, external group mappings, and folders in your
 
 ## Customizing the Generated Files
 
-- The `main.tf` file in the root directory contains the team definitions and module calls. You can modify this file to add or remove teams.
+The generator rewrites generated files on each run. It logs a warning before overwriting an existing file, so copy or commit any manual changes before regenerating.
+
+- The `main.tf` file in the root directory contains the team definitions and module calls. You can modify this file to add or remove teams after generation.
 - The `modules/teams/main.tf` file contains the resources for creating Grafana teams and external group mappings.
 - The `modules/folders/main.tf` file contains the resources for creating Grafana folders and setting permissions.
 

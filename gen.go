@@ -38,9 +38,14 @@ func createGrafanaTerraformStructure(baseDir string) error {
 		return fmt.Errorf("failed to create folders module directory: %w", err)
 	}
 
+	mainTerraform, err := generateMainTerraformFile(groups)
+	if err != nil {
+		return fmt.Errorf("failed to generate Terraform team definitions: %w", err)
+	}
+
 	// File contents
 	files := map[string]string{
-		filepath.Join(baseDir, "main.tf"): generateMainTerraformFile(groups),
+		filepath.Join(baseDir, "main.tf"): mainTerraform,
 		filepath.Join(baseDir, "terraform.tf"): `# Terraform settings and provider configurations
 
 terraform {
@@ -117,7 +122,7 @@ func createOrUpdateFile(filePath, content string) error {
 		return err
 	}
 
-	// File exists, update its content
+	slog.Warn("Terraform file already exists, overwriting", "file", filePath)
 	return os.WriteFile(filePath, []byte(content), 0644)
 }
 
@@ -135,15 +140,13 @@ func fetchGroups() ([]Group, error) {
 	switch provider {
 	case "azure":
 		groups, err = getAzureGroups()
-	// Add cases for other providers here
+		// Add cases for other providers here
 	default:
-		slog.Error("Unsupported provider", "provider", provider)
-		os.Exit(1)
+		return nil, fmt.Errorf("unsupported provider %q", provider)
 	}
 
 	if err != nil {
-		slog.Error("Failed to fetch groups", "error", err)
-		os.Exit(1)
+		return nil, fmt.Errorf("failed to fetch groups: %w", err)
 	}
 
 	cachedGroups = groups
