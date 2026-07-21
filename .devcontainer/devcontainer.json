@@ -1,0 +1,53 @@
+{
+  "name": "grafana-team-terraform-generator",
+  "build": {
+    "dockerfile": "Dockerfile"
+  },
+  "features": {
+    "ghcr.io/devcontainers/features/terraform:1": {
+      "version": "1.15.8",
+      "installSentinel": true
+    },
+    "ghcr.io/devcontainers/features/github-cli:1": {},
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "configureZshAsDefaultShell": true
+    }
+  },
+  "forwardPorts": [],
+  "mounts": [
+    "source=${localWorkspaceFolderBasename}-go-mod,target=/go/pkg/mod,type=volume"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "golang.Go",
+        "hashicorp.terraform",
+        "redhat.vscode-yaml",
+        "ms-azuretools.vscode-docker"
+      ],
+      "settings": {
+        "go.useLanguageServer": true,
+        "go.lintTool": "staticcheck",
+        "go.lintOnSave": "file",
+        "go.buildOnSave": "package",
+        "go.testOnSave": "off",
+        "[go]": {
+          "editor.formatOnSave": true,
+          "editor.defaultFormatter": "golang.go"
+        },
+        "terraform.languageServer": {
+          "terraform.path": "terraform"
+        }
+      }
+    }
+  },
+  "remoteEnv": {
+    "GTF_PROVIDER": "azure",
+    "GTF_LOG_LEVEL": "info",
+    "GOMODCACHE": "/go/pkg/mod",
+    "GOCACHE": "/home/vscode/.cache/go-build",
+    "GOTOOLCHAIN": "local"
+  },
+  "postCreateCommand": "sudo chown -R vscode:vscode /go/pkg/mod && mkdir -p /home/vscode/.cache/go-build && go version && go mod download",
+  "remoteUser": "vscode"
+}

@@ -1,20 +1,17 @@
-# Use the official Golang image to create a build artifact.
-# This is based on Debian and sets the GOPATH environment variable at /go.
-FROM golang:1.22 as builder
+# Use the official Go image to create a build artifact.
+FROM golang:1.26@sha256:3aff6657219a4d9c14e27fb1d8976c49c29fddb70ba835014f477e1c70636647 AS builder
 
-# Copy the local package files to the container's workspace.
-WORKDIR /go/src/github.com/grafana/grafana-terraform-generator
+WORKDIR /go/src/github.com/grafana/grafana-team-terraform-generator
 COPY . .
 
-# Build the command inside the container.
-# (You might need to modify the path or add additional build commands depending on your app)
-RUN go build -o /grafana-tf-gen
+ENV GOTOOLCHAIN=local
+RUN go build -trimpath -ldflags="-s -w" -o /grafana-tf-gen
 
-# Use a Docker multi-stage build to create a lean production image.
-FROM debian:buster-slim
+# Use a lean, supported Debian runtime image.
+FROM debian:bookworm-slim@sha256:7b140f374b289a7c2befc338f42ebe6441b7ea838a042bbd5acbfca6ec875818
 
-# Copy the binary to the production image from the builder stage.
+COPY --from=builder /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
+
 COPY --from=builder /grafana-tf-gen /grafana-tf-gen
 
-# Run the web service on container startup.
 CMD ["/grafana-tf-gen"]

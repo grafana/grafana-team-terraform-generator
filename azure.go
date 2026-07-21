@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"strings"
+	"time"
 
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	abstractions "github.com/microsoft/kiota-abstractions-go"
@@ -21,13 +23,13 @@ func getAzureGroups() ([]Group, error) {
 	// Azure AD authentication
 	cred, err := azidentity.NewClientSecretCredential(tenantID, clientID, clientSecret, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to get Azure credentials: %v", err)
+		return nil, fmt.Errorf("failed to get Azure credentials: %w", err)
 	}
 
 	// Create a new Graph client
 	client, err := msgraph.NewGraphServiceClientWithCredentials(cred, nil)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create Graph client: %v", err)
+		return nil, fmt.Errorf("failed to create Graph client: %w", err)
 	}
 
 	return fetchAllGroups(client)
@@ -64,12 +66,15 @@ func fetchAllGroups(client *msgraph.GraphServiceClient) ([]Group, error) {
 
 // fetchGroupsPage fetches a single page of groups
 func fetchGroupsPage(client *msgraph.GraphServiceClient, nextLink *string, requestHeaders *abstractions.RequestHeaders) (fetchGroupsResult, error) {
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
 	var err error
 	var result models.GroupCollectionResponseable
 
 	if nextLink == nil {
 		// First request
-		result, err = client.Groups().Get(context.Background(), &msgroups.GroupsRequestBuilderGetRequestConfiguration{
+		result, err = client.Groups().Get(ctx, &msgroups.GroupsRequestBuilderGetRequestConfiguration{
 			QueryParameters: &msgroups.GroupsRequestBuilderGetQueryParameters{
 				Select: []string{"displayName", "id"},
 				Top:    Int32(300), // Max value allowed
@@ -78,25 +83,38 @@ func fetchGroupsPage(client *msgraph.GraphServiceClient, nextLink *string, reque
 		})
 	} else {
 		// Subsequent requests using the next link
-		result, err = client.Groups().WithUrl(*nextLink).Get(context.Background(), nil)
+		result, err = client.Groups().WithUrl(*nextLink).Get(ctx, nil)
 	}
 
 	if err != nil {
-		return fetchGroupsResult{}, fmt.Errorf("failed to fetch groups: %v", err)
+		return fetchGroupsResult{}, fmt.Errorf("failed to fetch groups: %w", err)
 	}
 
-	var groups []Group
-	for _, group := range result.GetValue() {
-		groups = append(groups, Group{
-			Name:       *group.GetDisplayName(),
-			Identifier: *group.GetId(),
-		})
-	}
+	groups := groupsFromResponse(result.GetValue())
 
 	return fetchGroupsResult{
 		Groups:   groups,
 		NextLink: result.GetOdataNextLink(),
 	}, nil
+}
+
+func groupsFromResponse(values []models.Groupable) []Group {
+	groups := make([]Group, 0, len(values))
+	for _, group := range values {
+		if group == nil {
+			slog.Warn("Skipping group with an empty response")
+			continue
+		}
+
+		name, identifier := group.GetDisplayName(), group.GetId()
+		if name == nil || identifier == nil || strings.TrimSpace(*name) == "" || strings.TrimSpace(*identifier) == "" {
+			slog.Warn("Skipping group with missing display name or identifier")
+			continue
+		}
+
+		groups = append(groups, Group{Name: *name, Identifier: *identifier})
+	}
+	return groups
 }
 
 // Helper function to convert int32 to *int32
