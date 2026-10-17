@@ -1,6 +1,6 @@
 # Use the official Golang image to create a build artifact.
 # This is based on Debian and sets the GOPATH environment variable at /go.
-FROM golang:1.22 as builder
+FROM golang:1.27@sha256:820153096fda4de6ac1b7194d12e416b7dd8f4e9a33d17e0345b111b945162d8 as builder
 
 # Copy the local package files to the container's workspace.
 WORKDIR /go/src/github.com/grafana/grafana-terraform-generator
